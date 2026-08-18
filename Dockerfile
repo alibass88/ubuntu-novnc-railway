@@ -1,13 +1,18 @@
 FROM dorowu/ubuntu-desktop-lxde-vnc:focal
 
-# Railway utilise souvent des ports dynamiques, mais l'image dorowu attend le port 80 par défaut.
-# On force le port via les variables d'environnement de l'image.
-ENV PORT=80
-ENV WEB_CLEAN=1
+# L'image de base dorowu utilise nginx sur le port 80.
+# Railway fournit un port dynamique via la variable d'environnement PORT.
+# Nous devons modifier la configuration de nginx au démarrage pour utiliser ce port.
 
-# Railway nécessite parfois que le processus écoute sur 0.0.0.0
-# L'image de base le fait déjà, mais on s'assure de l'exposition.
-EXPOSE 80
+# On installe 'gettext-base' pour avoir 'envsubst' si besoin, mais ici on va utiliser sed.
+RUN apt-get update && apt-get install -y gettext-base && rm -rf /var/lib/apt/lists/*
 
-# Commande de démarrage explicite si nécessaire
-CMD ["/startup.sh"]
+# Script de démarrage personnalisé pour injecter le port Railway dans Nginx
+RUN echo '#!/bin/bash\n\
+if [ -n "$PORT" ]; then\n\
+  echo "Setting Nginx to listen on port $PORT"\n\
+  sed -i "s/listen 80 default_server;/listen $PORT default_server;/g" /etc/nginx/sites-enabled/default\n\
+fi\n\
+exec /startup.sh' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
